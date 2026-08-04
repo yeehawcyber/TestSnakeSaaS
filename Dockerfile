@@ -13,6 +13,12 @@ RUN npm run build:aws
 FROM node:22-alpine AS runner
 WORKDIR /app
 
+# The standalone server needs Node, not the npm CLI or its dependency tree.
+# Excluding unused package-manager tooling reduces runtime attack surface.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+    /usr/local/bin/npm \
+    /usr/local/bin/npx
+
 ENV HOSTNAME=0.0.0.0 \
     NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \

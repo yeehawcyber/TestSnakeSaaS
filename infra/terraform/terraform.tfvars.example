@@ -1,0 +1,16 @@
+aws_region            = "us-east-1"
+environment           = "dev"
+project_name          = "testsnakesaas"
+domain_name           = "dev.snake.example.com"
+route53_zone_id       = "Z0123456789EXAMPLE"
+cognito_domain_prefix = "testsnakesaas-dev-replace-me"
+image_tag              = "0000000000000000000000000000000000000000"
+
+# Copy these from: terraform -chdir=infra/terraform/bootstrap output
+state_bucket_arn  = "arn:aws:s3:::testsnakesaas-terraform-state-123456789012"
+state_kms_key_arn = "arn:aws:kms:us-east-1:123456789012:key/replace-me"
+state_key         = "testsnakesaas/dev/terraform.tfstate"
+
+# This repository currently uses GitHub's immutable owner/repository ID subject.
+github_repository          = "yeehawcyber/TestSnakeSaaS"
+github_oidc_subject_prefix = "repo:yeehawcyber@257407814/TestSnakeSaaS@1323205882"

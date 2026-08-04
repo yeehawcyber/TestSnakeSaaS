@@ -12,7 +12,7 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-Fill `.env.local` with the outputs from the AWS services stack before starting. Open `http://localhost:3000` and sign in through Cognito. In the game, use the arrow keys or WASD. Space pauses the run; R resets it.
+Fill `.env.local` with the outputs from the reviewed Terraform dev deployment before starting. Open `http://localhost:3000` and sign in through Cognito. In the game, use the arrow keys or WASD. Space pauses the run; R resets it.
 
 For local Bedrock chat, the AWS SDK uses the standard local AWS credential chain. AWS credentials do not belong in `.env.local` or in browser code.
 
@@ -37,43 +37,19 @@ docker run --rm -p 8080:8080 snake-shift-web
 
 The game is served at `http://localhost:8080`. Container and load-balancer health checks can use `GET /api/health`.
 
-## Create Cognito and Bedrock access
+## AWS infrastructure
 
-`deploy/aws-services.yaml` creates:
+Terraform under `infra/terraform` is the sole infrastructure source of truth. It defines encrypted remote state, networking, security groups, ECR, ECS Fargate, ALB/TLS/DNS, CloudWatch logging and rollback alarms, Cognito, least-privilege Nova Lite access, and GitHub Actions OIDC roles.
 
-- a Cognito user pool with verified email sign-in, optional authenticator-app MFA, and deletion protection;
-- an OAuth public client using Authorization Code + PKCE with no client secret;
-- a Cognito hosted domain;
-- a least-privilege ECS task role for the selected Bedrock inference profile and its underlying foundation model.
+Start with the [Terraform review guide](infra/terraform/README.md), then review the saved-plan, cost, IAM, migration, deployment, and rollback documents it links. The configuration is limited to dev in `us-east-1`. Never run `terraform apply` without reviewing a saved plan and passing the documented human approval gate.
 
-Deploy the stack after choosing exact callback, logout, and globally unique Cognito domain values:
-
-```powershell
-aws cloudformation deploy `
-  --template-file deploy/aws-services.yaml `
-  --stack-name snake-shift-services `
-  --capabilities CAPABILITY_IAM `
-  --parameter-overrides `
-    CallbackUrl=http://localhost:3000/ `
-    LogoutUrl=http://localhost:3000/ `
-    CognitoDomainPrefix=replace-with-a-unique-prefix
-```
-
-Read the stack outputs and copy them into `.env.local`. The default chat model is the `us.amazon.nova-lite-v1:0` inference profile. Verify it in the target region before deployment if you change regions or model IDs.
+The default chat model is the `us.amazon.nova-lite-v1:0` inference profile. The ECS task role permits only model invocation on that profile and its verified US backing models.
 
 The app exchanges Cognito authorization codes in the browser with PKCE. The `/api/chat` server route independently verifies every Cognito access token before invoking Bedrock. Chat prompts are bounded, history is normalized, requests are rate-limited per authenticated user and task, and Bedrock output is streamed to the chat panel. Optional Bedrock Guardrail identifiers can be supplied through the documented environment variables.
 
 ## AWS deployment target
 
-The image is designed for Amazon ECR and Amazon ECS on AWS Fargate. For the quickest managed HTTP deployment, ECS Express Mode is also a fit. For a production Fargate service behind an Application Load Balancer:
-
-1. Build and push the image to a private ECR repository with image scanning enabled.
-2. Create the CloudWatch Logs group `/ecs/snake-shift-web`.
-3. Deploy `deploy/aws-services.yaml`, then replace the task definition placeholders with its Cognito, model, and ECS task-role outputs.
-4. Create an ECS service on Fargate platform `LATEST` with an Application Load Balancer forwarding to container port `8080`.
-5. Configure the target group health path as `/api/health`, add a health-check grace period, enable deployment circuit-breaker rollback, and use HTTPS with an ACM certificate.
-
-The example task definition uses the required `awsvpc` network mode and a valid Fargate pairing of 0.25 vCPU and 512 MiB memory. It runs as a non-root user with a read-only root filesystem, sends logs to CloudWatch in blocking mode, and obtains Bedrock permissions only through the ECS task role.
+The image is deployed to a private, immutable-tag ECR repository and ECS Fargate behind an HTTPS Application Load Balancer. Pull requests validate and plan only. Manual dev deploys use GitHub OIDC, rebuild and scan the exact commit, wait for a protected-environment reviewer, push the full commit SHA, apply the saved Terraform plan, and verify `/api/health`. No workflow merges pull requests or targets production.
 
 ## Project structure
 
@@ -85,5 +61,5 @@ The example task definition uses the required `awsvpc` network mode and a valid 
 - `lib/chat-validation.ts` — bounded, deterministic validation for Bedrock requests.
 - `tests/` — unit coverage for gameplay and chat request validation.
 - `Dockerfile` — multi-stage AWS-ready production image.
-- `deploy/ecs-task-definition.example.json` — safe baseline task definition for ECS Fargate.
-- `deploy/aws-services.yaml` — Cognito resources and least-privilege Bedrock task role.
+- `infra/terraform` — complete, modular dev AWS infrastructure and operational review package.
+- `.github/workflows/aws-dev.yml` — OIDC-only PR planning and approval-gated dev deployment/rollback.

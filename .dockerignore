@@ -1,13 +1,16 @@
 .git
 .gitignore
+.github
 .next
 .vinext
 dist
+infra
 node_modules
 npm-debug.log*
 .wrangler
 .dev-server.*.log
 coverage
+tests
 work
 outputs
 .env*
