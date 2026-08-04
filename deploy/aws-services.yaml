@@ -1,0 +1,156 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Cognito authentication and least-privilege Bedrock access for Snake Shift.
+
+Parameters:
+  CallbackUrl:
+    Type: String
+    Description: Exact HTTPS or localhost URL Cognito returns to after sign-in.
+    AllowedPattern: '^https?://.+$'
+    ConstraintDescription: Must be an absolute HTTP or HTTPS URL.
+  LogoutUrl:
+    Type: String
+    Description: Exact HTTPS or localhost URL Cognito returns to after sign-out.
+    AllowedPattern: '^https?://.+$'
+    ConstraintDescription: Must be an absolute HTTP or HTTPS URL.
+  CognitoDomainPrefix:
+    Type: String
+    Description: Globally unique prefix for the Cognito hosted sign-in domain.
+    MinLength: 1
+    MaxLength: 63
+    AllowedPattern: '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$'
+    ConstraintDescription: Use lowercase letters, numbers, and internal hyphens only.
+  BedrockInferenceProfileId:
+    Type: String
+    Description: Bedrock system inference profile used by the chat server.
+    Default: us.amazon.nova-lite-v1:0
+    AllowedPattern: '^[A-Za-z0-9._:-]+$'
+  BedrockFoundationModelId:
+    Type: String
+    Description: Foundation model routed by the selected inference profile.
+    Default: amazon.nova-lite-v1:0
+    AllowedPattern: '^[A-Za-z0-9._:-]+$'
+
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      AutoVerifiedAttributes:
+        - email
+      DeletionProtection: ACTIVE
+      MfaConfiguration: OPTIONAL
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+          TemporaryPasswordValidityDays: 7
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+      SoftwareTokenMfaConfiguration:
+        Enabled: true
+      UsernameAttributes:
+        - email
+      UsernameConfiguration:
+        CaseSensitive: false
+      UserPoolTags:
+        Application: snake-shift
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+      CallbackURLs:
+        - !Ref CallbackUrl
+      LogoutURLs:
+        - !Ref LogoutUrl
+      SupportedIdentityProviders:
+        - COGNITO
+      EnableTokenRevocation: true
+      PreventUserExistenceErrors: ENABLED
+      ExplicitAuthFlows:
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+      AccessTokenValidity: 60
+      IdTokenValidity: 60
+      RefreshTokenValidity: 30
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref CognitoDomainPrefix
+      UserPoolId: !Ref UserPool
+
+  BedrockTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:*
+      Policies:
+        - PolicyName: InvokeConfiguredBedrockModel
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockInferenceProfileId}
+                  - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/${BedrockFoundationModelId}
+      Tags:
+        - Key: Application
+          Value: snake-shift
+
+Outputs:
+  CognitoUserPoolId:
+    Description: Runtime value for COGNITO_USER_POOL_ID.
+    Value: !Ref UserPool
+  CognitoClientId:
+    Description: Runtime value for COGNITO_CLIENT_ID.
+    Value: !Ref UserPoolClient
+  CognitoDomainUrl:
+    Description: Runtime value for COGNITO_DOMAIN.
+    Value: !Sub https://${CognitoDomainPrefix}.auth.${AWS::Region}.amazoncognito.com
+  BedrockModelId:
+    Description: Runtime value for BEDROCK_MODEL_ID.
+    Value: !Ref BedrockInferenceProfileId
+  EcsTaskRoleArn:
+    Description: ECS task role that permits only the configured Bedrock model invocation.
+    Value: !GetAtt BedrockTaskRole.Arn
