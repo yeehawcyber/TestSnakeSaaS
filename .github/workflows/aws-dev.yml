@@ -110,12 +110,18 @@ jobs:
             sed -n '1,1000p' infra/terraform/plan.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify saved plan dependencies
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.deploy
+        run: test -s infra/terraform/dev.tfplan && test -s infra/terraform/.terraform/cost-guard.zip
       - name: Upload exact saved plan
         if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.deploy
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: terraform-dev-plan-${{ github.run_id }}
-          path: infra/terraform/dev.tfplan
+          path: |
+            infra/terraform/dev.tfplan
+            infra/terraform/.terraform/cost-guard.zip
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
 
