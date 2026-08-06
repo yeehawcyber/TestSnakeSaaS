@@ -1,3 +1,17 @@
+mock_provider "aws" {
+  mock_data "aws_partition" {
+    defaults = {
+      partition = "aws"
+    }
+  }
+
+  mock_data "aws_iam_policy_document" {
+    defaults = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+}
+
 run "bootstrap_access_creation_plan" {
   command = plan
 
