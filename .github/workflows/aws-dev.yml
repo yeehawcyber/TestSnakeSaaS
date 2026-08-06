@@ -93,6 +93,8 @@ jobs:
           -backend-config="use_lockfile=true"
       - name: Create saved plan
         run: terraform -chdir=infra/terraform plan -lock=false -input=false -out=dev.tfplan
+      - name: Initialize bootstrap test root
+        run: terraform -chdir=infra/terraform/bootstrap init -backend=false
       - name: Run provider-backed Terraform tests
         run: |
           terraform -chdir=infra/terraform/bootstrap test
