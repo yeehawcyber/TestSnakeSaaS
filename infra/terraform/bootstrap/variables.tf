@@ -19,3 +19,15 @@ variable "state_bucket_name" {
   default     = null
   nullable    = true
 }
+
+variable "github_oidc_subject_prefix" {
+  description = "Immutable GitHub OIDC repo subject prefix containing owner and repository IDs."
+  type        = string
+  default     = "repo:yeehawcyber@257407814/TestSnakeSaaS@1323205882"
+}
+
+variable "github_environment" {
+  description = "Approval-protected GitHub environment trusted by the deploy role."
+  type        = string
+  default     = "dev"
+}

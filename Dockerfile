@@ -13,6 +13,11 @@ RUN npm run build:aws
 FROM node:22-alpine AS runner
 WORKDIR /app
 
+# Makes the existing Next.js HTTP server compatible with Lambda container
+# images and API Gateway without adding a framework-specific handler.
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:1.0.0 \
+  /lambda-adapter /opt/extensions/lambda-adapter
+
 # The standalone server needs Node, not the npm CLI or its dependency tree.
 # Excluding unused package-manager tooling reduces runtime attack surface.
 RUN rm -rf /usr/local/lib/node_modules/npm \
@@ -22,7 +27,11 @@ RUN rm -rf /usr/local/lib/node_modules/npm \
 ENV HOSTNAME=0.0.0.0 \
     NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
-    PORT=8080
+    PORT=8080 \
+    AWS_LWA_PORT=8080 \
+    AWS_LWA_READINESS_CHECK_PATH=/api/health \
+    AWS_LWA_INVOKE_MODE=buffered \
+    AWS_LWA_ASYNC_INIT=true
 
 COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/.next/standalone ./

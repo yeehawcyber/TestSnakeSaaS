@@ -1,52 +1,34 @@
 # TestSnakeSaaS Terraform
 
-This directory is the sole infrastructure source of truth for the TestSnakeSaaS dev environment in `us-east-1`. The retired CloudFormation template and example ECS task definition have been removed; their resources and controls are represented here as executable Terraform.
+This directory is the infrastructure source of truth for the cost-bounded `dev` environment in `us-east-1`.
 
-No configuration in this repository targets production. The root variable validations reject any environment other than `dev` and any region other than `us-east-1`.
+## Deployed architecture
 
-## Architecture
-
-| Module | Responsibility |
+| Resource | Responsibility |
 | --- | --- |
-| `remote-state` | Versioned, private S3 state with enforced customer-managed KMS encryption and native S3 lockfile support |
-| `networking` | Two-AZ VPC, public ALB subnets, private task subnets, single dev NAT gateway, and an S3 gateway endpoint |
-| `security-groups` | Internet-to-ALB 80/443, ALB-to-task 8080, and task HTTPS egress only |
-| `ecr` | AES-256 encrypted private repository, immutable tags, scan on push, and bounded retention |
-| `cloudwatch-logging` | Thirty-day ECS application log group |
-| `cognito` | Email user pool, optional TOTP MFA, deletion protection, public Authorization Code client, and hosted domain |
-| `ecs-iam` | Separate execution and task roles; task access is limited to Nova Lite invocation |
-| `alb` | Internet-facing ALB, HTTP redirect, IP target group, and `/api/health` checks |
-| `acm-route53` | DNS-validated ECDSA certificate, TLS 1.2/1.3 listener, and Route 53 alias |
-| `deployment-rollback` | ALB unhealthy-target alarm consumed by ECS deployment alarm rollback |
-| `ecs-fargate` | Fargate cluster, hardened task definition, rolling service, circuit breaker, and alarm rollback |
-| `github-oidc` | GitHub OIDC provider plus separate PR-plan and approval-gated dev-deploy roles |
+| S3 + KMS bootstrap | Private, versioned, encrypted Terraform state with native lockfiles |
+| ECR | Immutable, scanned Lambda container images with bounded retention |
+| Lambda | On-demand Next.js server with 1 GB memory, 30-second timeout, and reserved concurrency 2 |
+| API Gateway HTTP API | AWS-managed HTTPS endpoint with 2 requests/second and burst 4 throttling |
+| Cognito Lite | Hosted PKCE login; public self-registration is disabled |
+| CloudWatch Logs | Seven-day Lambda log retention |
+| AWS Budget | Account-wide USD 10 monthly budget |
+| Cost guard | Budget alerts invoke a dedicated Lambda that disables web concurrency |
+| IAM | Lambda can write only its log group and invoke only Nova Lite |
 
-The Fargate container remains non-root (`1000:1000`), unprivileged, capability-free, and read-only at the root filesystem. It exposes only port `8080`, uses blocking CloudWatch logging, and has both container and ALB health checks on `/api/health`.
+There is no VPC, NAT Gateway, ALB, public IPv4 allocation, Route 53 hosted zone, or custom domain. The application URL is the `application_url` Terraform output.
 
-## Required inputs
+## Deployment execution authority
 
-Copy `terraform.tfvars.example` to the ignored `terraform.tfvars` and replace every example value. A public Route 53 hosted zone must already be authoritative for `domain_name`; the AWS account had no hosted zones during the 2026-08-04 audit, so DNS ownership/delegation is a prerequisite rather than an assumption.
+GitHub Actions on `main` is the only deployment execution authority for the AWS `dev` environment. Terraform remains the infrastructure definition, but the dev root must never be applied from a developer shell, agent, plugin, MCP server, or other local automation.
 
-The `image_tag` must be a full lowercase 40-character Git commit SHA. ECR rejects attempts to overwrite an existing tag.
+1. Pull requests run formatting, validation, Terraform tests, a container vulnerability scan, and a read-only remote-state plan through GitHub OIDC.
+2. A manual `workflow_dispatch` run from `main` creates and renders a saved plan. Dispatches from any other ref cannot reach the plan or apply jobs.
+3. Selecting `deploy: true` sends the apply job through the reviewer-protected GitHub `dev` environment.
+4. After approval, Actions publishes the immutable image, applies that exact saved plan, verifies `/api/health`, and requires a final no-change plan.
 
-## Review documents
+The one-time state/OIDC control-plane bootstrap was completed before this policy took effect. It is not an application deployment path. All subsequent application plans, applies, rollbacks, and drift reconciliation must run through the checked-in workflow from `main`.
 
-- [PLAN.md](PLAN.md) — plan commands, reviewed resource summary, and current validation status.
-- [COSTS.md](COSTS.md) — dev cost estimate and variable-cost assumptions.
-- [IAM_REQUIREMENTS.md](IAM_REQUIREMENTS.md) — bootstrap, runtime, plan, and deploy permissions.
-- [MIGRATION.md](MIGRATION.md) — CloudFormation-to-Terraform mapping and import contingency.
-- [OPERATIONS.md](OPERATIONS.md) — approval-gated bootstrap, deploy, verification, and rollback procedures.
+The `image_tag` is the immutable 40-character GitHub commit SHA. Never commit `terraform.tfvars`, backend files, state, or saved plans.
 
-## Local validation (no AWS changes)
-
-```powershell
-terraform -chdir=infra/terraform fmt -check -recursive
-terraform -chdir=infra/terraform/bootstrap init
-terraform -chdir=infra/terraform/bootstrap validate
-terraform -chdir=infra/terraform/bootstrap test
-terraform -chdir=infra/terraform init -backend=false
-terraform -chdir=infra/terraform validate
-terraform -chdir=infra/terraform test
-```
-
-Never commit `terraform.tfvars`, `backend.hcl`, state, or saved binary plans. The directory-level `.gitignore` excludes them.
+See [COSTS.md](COSTS.md), [OPERATIONS.md](OPERATIONS.md), and [IAM_REQUIREMENTS.md](IAM_REQUIREMENTS.md).

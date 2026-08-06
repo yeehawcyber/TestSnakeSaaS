@@ -1,6 +1,6 @@
 locals {
-  name_prefix = "${var.project_name}-${var.environment}"
-  public_url  = "https://${var.domain_name}"
+  name_prefix   = "${var.project_name}-${var.environment}"
+  function_name = "${local.name_prefix}-web"
 
   common_tags = merge(
     {

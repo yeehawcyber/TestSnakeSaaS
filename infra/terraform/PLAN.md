@@ -1,80 +1,32 @@
-# Terraform plan for review
+# Applied dev plan record
 
-Plan date: 2026-08-04. Target: dev in `us-east-1`.
+Deployment date: 2026-08-05. Account: `620649695133`. Region: `us-east-1`.
 
-## Current AWS inventory
+- Remote-state bootstrap: 8 added, 0 changed, 0 destroyed.
+- ECR foundation: 2 added, 0 changed, 0 destroyed.
+- Serverless application: 13 added, 0 changed, 0 destroyed.
+- Cognito callback finalization: 0 added, 2 changed in place, 0 destroyed.
+- Automatic cost guard: 8 added, 1 budget changed in place, 0 destroyed.
+- Final refresh plan: no changes.
 
-Read-only checks found no `snake-shift-services` CloudFormation stack, no matching ECR repository, no ECS cluster, no Route 53 hosted zone, and no GitHub OIDC provider. The Bedrock system inference profile `us.amazon.nova-lite-v1:0` is active and routes to Nova Lite in `us-east-1`, `us-east-2`, and `us-west-2`.
+Application endpoint: `https://un65jeamp5.execute-api.us-east-1.amazonaws.com`
 
-## Commands
+The applied architecture intentionally replaced the earlier un-applied ECS/NAT/ALB proposal because its estimated fixed cost was incompatible with the USD 10 monthly constraint.
 
-Remote state bootstrap plan:
+Validation obtained:
 
-```powershell
-terraform -chdir=infra/terraform/bootstrap init
-terraform -chdir=infra/terraform/bootstrap plan -out=bootstrap.tfplan
-terraform -chdir=infra/terraform/bootstrap show -no-color bootstrap.tfplan
-```
+- Terraform formatting, validation, and test: passed.
+- Application tests: 10/10 passed.
+- ESLint, Vinext build, and Next.js build: passed.
+- Local non-root, read-only container health check: passed.
+- ECR scan: complete with no reported findings.
+- Deployed `/api/health`: HTTP 200.
+- Deployed home page: HTTP 200 and contains Snake/Shift.
+- Cognito runtime configuration: configured for the API Gateway endpoint.
+- Budget thresholds, SNS subscription, and cost-guard Lambda dry-run authorization: verified.
 
-Dev creation plan after the backend exists:
+## GitHub Actions migration
 
-```powershell
-terraform -chdir=infra/terraform init -backend-config=backend.hcl
-terraform -chdir=infra/terraform plan -lock-timeout=5m -out=dev.tfplan
-terraform -chdir=infra/terraform show -no-color dev.tfplan
-```
+The approved bootstrap plan was applied on 2026-08-05, adding the GitHub OIDC provider, a read-only plan role, and an approval-gated deploy role: **8 added, 0 changed, 0 destroyed**. It did not change the running application. The post-apply bootstrap refresh plan reported no changes.
 
-## Reviewed plan result
-
-Terraform 1.15.8 with AWS provider 6.57.1 produced these provider-backed, plan-only results on 2026-08-04:
-
-- account-specific remote-state bootstrap (`testsnakesaas-terraform-state-620649695133`): **8 to add, 0 to change, 0 to destroy**;
-- complete dev root: **58 to add, 0 to change, 0 to destroy**.
-
-The bootstrap plan creates one KMS key and alias plus one private, versioned, KMS-encrypted S3 bucket and its ownership, public-access, encryption, versioning, TLS-only, and designated-KMS-key policy controls.
-
-The dev plan is creation-only against the audited account and includes:
-
-- one two-AZ VPC with four subnets, Internet/NAT routing, one Elastic IP, and an S3 gateway endpoint;
-- ALB/task security groups and explicit rules;
-- one immutable/scanned ECR repository with a lifecycle policy;
-- one CloudWatch log group and one unhealthy-target rollback alarm;
-- Cognito user pool, public code-flow client, and hosted domain;
-- ECS execution/task roles and inline policies;
-- ALB, target group, HTTP redirect, ACM certificate, DNS validation records, HTTPS listener, and application alias;
-- ECS cluster, hardened task definition, and Fargate service with two rollback mechanisms; and
-- GitHub OIDC provider plus plan/deploy roles and scoped inline policies.
-
-| Module | Add | Change | Destroy |
-| --- | ---: | ---: | ---: |
-| networking | 19 | 0 | 0 |
-| security groups | 7 | 0 | 0 |
-| GitHub OIDC/IAM | 10 | 0 | 0 |
-| ACM/Route 53 | 5 | 0 | 0 |
-| ECS execution/task IAM | 4 | 0 | 0 |
-| ALB | 3 | 0 | 0 |
-| Cognito | 3 | 0 | 0 |
-| ECS Fargate | 3 | 0 | 0 |
-| ECR | 2 | 0 | 0 |
-| CloudWatch logging | 1 | 0 | 0 |
-| deployment rollback alarm | 1 | 0 | 0 |
-| **Dev total** | **58** | **0** | **0** |
-
-No destroy or import action is expected. Any non-creation action, existing-resource conflict, or proposed Cognito replacement is a stop condition requiring a new migration review.
-
-The dev result was generated with `terraform test` using placeholder DNS, state ARNs, Cognito prefix, and a zero commit SHA. It evaluates the real AWS provider and complete dependency graph but does not read a not-yet-created remote state backend. It is therefore a configuration creation plan for review, not an apply-ready live-state plan. The pull-request workflow will produce the authoritative refresh plan after the state/OIDC foundation and real Route 53 inputs exist.
-
-## Validation status
-
-- `terraform fmt -check -recursive`: passed
-- bootstrap `terraform validate`: passed
-- dev root `terraform validate`: passed
-- bootstrap plan test: passed (1/1)
-- dev plan test: passed (1/1)
-- GitHub Actions workflow: actionlint 1.7.12 passed
-- application: all 10 tests, ESLint, Vinext build, and AWS Next.js build passed
-- production dependencies: `npm audit --omit=dev --audit-level=high` found 0 vulnerabilities
-- container: build passed; Trivy 0.73.0 found 0 HIGH/CRITICAL findings; non-root/read-only `/api/health` returned HTTP 200
-- no Terraform apply, import, state mutation, or AWS write call was run
-
-No plan is approval to apply.
+Access Analyzer reported no findings for all five inline policies; Terraform formatting, validation, and both plan tests passed; actionlint passed. After this workflow branch is reviewed and merged, GitHub Actions on `main` is the only authorized executor for dev remote-state plans, immutable image publication, exact saved-plan applies, health verification, rollbacks, and drift reconciliation. AWS Core tooling and local automation are not deployment paths.

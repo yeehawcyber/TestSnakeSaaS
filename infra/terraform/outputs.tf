@@ -1,44 +1,34 @@
 output "application_url" {
-  description = "Public HTTPS URL for Snake/Shift."
-  value       = local.public_url
+  description = "AWS-managed public HTTPS URL for Snake/Shift."
+  value       = aws_apigatewayv2_api.web.api_endpoint
 }
 
 output "ecr_repository_url" {
-  description = "Private ECR repository used by the deployment workflow."
+  description = "Private ECR repository used by the Lambda deployment."
   value       = module.ecr.repository_url
 }
 
-output "ecs_cluster_name" {
-  description = "ECS cluster name."
-  value       = module.ecs.cluster_name
-}
-
-output "ecs_service_name" {
-  description = "ECS service name."
-  value       = module.ecs.service_name
+output "lambda_function_name" {
+  description = "Lambda function serving the Next.js application."
+  value       = aws_lambda_function.web.function_name
 }
 
 output "cognito_user_pool_id" {
-  description = "Cognito user pool ID used by the application."
-  value       = module.cognito.user_pool_id
+  value = module.cognito.user_pool_id
 }
 
 output "cognito_client_id" {
-  description = "Public Cognito OAuth client ID."
-  value       = module.cognito.user_pool_client_id
+  value = module.cognito.user_pool_client_id
 }
 
 output "cognito_domain_url" {
-  description = "Cognito hosted UI base URL."
-  value       = module.cognito.domain_url
+  value = module.cognito.domain_url
 }
 
-output "github_plan_role_arn" {
-  description = "OIDC role assumed by pull-request Terraform plans."
-  value       = module.github_oidc.plan_role_arn
+output "monthly_budget_name" {
+  value = aws_budgets_budget.monthly_account.name
 }
 
-output "github_deploy_role_arn" {
-  description = "OIDC role assumed only by the approval-protected dev environment."
-  value       = module.github_oidc.deploy_role_arn
+output "cost_guard_function_name" {
+  value = aws_lambda_function.cost_guard.function_name
 }

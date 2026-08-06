@@ -35,21 +35,21 @@ docker build -t snake-shift-web .
 docker run --rm -p 8080:8080 snake-shift-web
 ```
 
-The game is served at `http://localhost:8080`. Container and load-balancer health checks can use `GET /api/health`.
+The game is served at `http://localhost:8080`. Local container and deployed API health checks use `GET /api/health`.
 
 ## AWS infrastructure
 
-Terraform under `infra/terraform` is the sole infrastructure source of truth. It defines encrypted remote state, networking, security groups, ECR, ECS Fargate, ALB/TLS/DNS, CloudWatch logging and rollback alarms, Cognito, least-privilege Nova Lite access, and GitHub Actions OIDC roles.
+Terraform under `infra/terraform` is the sole infrastructure source of truth. It defines encrypted remote state, ECR, a container-image Lambda, a throttled API Gateway HTTP API, Cognito, seven-day CloudWatch logging, least-privilege Nova Lite access, and an account-wide USD 10 monthly budget.
 
-Start with the [Terraform review guide](infra/terraform/README.md), then review the saved-plan, cost, IAM, migration, deployment, and rollback documents it links. The configuration is limited to dev in `us-east-1`. Never run `terraform apply` without reviewing a saved plan and passing the documented human approval gate.
+Start with the [Terraform review guide](infra/terraform/README.md), then review the saved-plan, cost, IAM, migration, deployment, and rollback documents it links. The configuration is limited to dev in `us-east-1`. Terraform is the infrastructure definition, and GitHub Actions on `main` is the only authorized executor for dev plans and applies. Never apply the dev root locally.
 
-The default chat model is the `us.amazon.nova-lite-v1:0` inference profile. The ECS task role permits only model invocation on that profile and its verified US backing models.
+The default chat model is the `us.amazon.nova-lite-v1:0` inference profile. The Lambda role permits only model invocation on that profile and its verified US backing models.
 
 The app exchanges Cognito authorization codes in the browser with PKCE. The `/api/chat` server route independently verifies every Cognito access token before invoking Bedrock. Chat prompts are bounded, history is normalized, requests are rate-limited per authenticated user and task, and Bedrock output is streamed to the chat panel. Optional Bedrock Guardrail identifiers can be supplied through the documented environment variables.
 
 ## AWS deployment target
 
-The image is deployed to a private, immutable-tag ECR repository and ECS Fargate behind an HTTPS Application Load Balancer. Pull requests validate and plan only. Manual dev deploys use GitHub OIDC, rebuild and scan the exact commit, wait for a protected-environment reviewer, push the full commit SHA, apply the saved Terraform plan, and verify `/api/health`. No workflow merges pull requests or targets production.
+The image is deployed from a private, immutable-tag ECR repository to Lambda through AWS Lambda Web Adapter. API Gateway supplies the stable AWS-managed HTTPS endpoint, so no paid domain, Route 53 zone, NAT Gateway, public IPv4 address, or load balancer is required. Pull requests validate and plan through a read-only OIDC role. Only an explicitly dispatched workflow on `main` can request an apply, and that apply requires approval in the `dev` environment before using the separate scoped deploy role.
 
 ## Project structure
 
@@ -62,4 +62,4 @@ The image is deployed to a private, immutable-tag ECR repository and ECS Fargate
 - `tests/` — unit coverage for gameplay and chat request validation.
 - `Dockerfile` — multi-stage AWS-ready production image.
 - `infra/terraform` — complete, modular dev AWS infrastructure and operational review package.
-- `.github/workflows/aws-dev.yml` — OIDC-only PR planning and approval-gated dev deployment/rollback.
+- `.github/workflows/aws-dev.yml` — OIDC-only Terraform validation, plan, approval-gated apply, image scanning, and deployment verification.
