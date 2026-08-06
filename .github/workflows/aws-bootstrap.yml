@@ -1,0 +1,156 @@
+name: AWS Terraform bootstrap from main
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/aws-bootstrap.yml"
+      - "infra/terraform/bootstrap-access/**"
+  workflow_dispatch:
+    inputs:
+      authentication:
+        description: Use seed only for the one-time temporary STS bootstrap
+        required: true
+        default: oidc
+        type: choice
+        options:
+          - oidc
+          - seed
+      apply:
+        description: Apply the exact saved bootstrap plan after approval
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aws-bootstrap-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  TF_IN_AUTOMATION: "true"
+  TERRAFORM_VERSION: 1.15.8
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+      - run: terraform -chdir=infra/terraform/bootstrap-access fmt -check
+      - run: terraform -chdir=infra/terraform/bootstrap-access init -backend=false
+      - run: terraform -chdir=infra/terraform/bootstrap-access validate
+      - run: terraform -chdir=infra/terraform/bootstrap-access test
+
+  plan:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: infra-bootstrap
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Configure one-time seed credentials
+        if: inputs.authentication == 'seed'
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.0.0
+        with:
+          aws-access-key-id: ${{ secrets.BOOTSTRAP_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.BOOTSTRAP_AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.BOOTSTRAP_AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: "620649695133"
+      - name: Configure bootstrap OIDC credentials
+        if: inputs.authentication == 'oidc'
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.0.0
+        with:
+          role-to-assume: ${{ vars.AWS_BOOTSTRAP_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: "620649695133"
+          role-session-name: github-bootstrap-plan-${{ github.run_id }}
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+      - name: Initialize protected bootstrap state
+        run: >-
+          terraform -chdir=infra/terraform/bootstrap-access init
+          -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+          -backend-config="key=testsnakesaas/bootstrap-access/terraform.tfstate"
+          -backend-config="region=${{ env.AWS_REGION }}"
+          -backend-config="encrypt=true"
+          -backend-config="kms_key_id=${{ vars.TF_STATE_KMS_KEY_ARN }}"
+          -backend-config="use_lockfile=true"
+      - name: Create saved bootstrap plan
+        run: terraform -chdir=infra/terraform/bootstrap-access plan -input=false -out=bootstrap-access.tfplan
+      - name: Render bootstrap plan
+        run: terraform -chdir=infra/terraform/bootstrap-access show -no-color bootstrap-access.tfplan | tee infra/terraform/bootstrap-access/plan.txt
+      - name: Add bootstrap plan to job summary
+        shell: bash
+        run: |
+          {
+            echo '## Terraform bootstrap-access plan'
+            echo '```terraform'
+            sed -n '1,1000p' infra/terraform/bootstrap-access/plan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload exact saved plan
+        if: inputs.apply
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: terraform-bootstrap-plan-${{ github.run_id }}
+          path: infra/terraform/bootstrap-access/bootstrap-access.tfplan
+          if-no-files-found: error
+          retention-days: 1
+
+  apply:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: infra-bootstrap
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Configure one-time seed credentials
+        if: inputs.authentication == 'seed'
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.0.0
+        with:
+          aws-access-key-id: ${{ secrets.BOOTSTRAP_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.BOOTSTRAP_AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.BOOTSTRAP_AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: "620649695133"
+      - name: Configure bootstrap OIDC credentials
+        if: inputs.authentication == 'oidc'
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.0.0
+        with:
+          role-to-assume: ${{ vars.AWS_BOOTSTRAP_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: "620649695133"
+          role-session-name: github-bootstrap-apply-${{ github.run_id }}
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: terraform-bootstrap-plan-${{ github.run_id }}
+          path: infra/terraform/bootstrap-access
+      - name: Initialize protected bootstrap state
+        run: >-
+          terraform -chdir=infra/terraform/bootstrap-access init
+          -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+          -backend-config="key=testsnakesaas/bootstrap-access/terraform.tfstate"
+          -backend-config="region=${{ env.AWS_REGION }}"
+          -backend-config="encrypt=true"
+          -backend-config="kms_key_id=${{ vars.TF_STATE_KMS_KEY_ARN }}"
+          -backend-config="use_lockfile=true"
+      - name: Apply exact reviewed bootstrap plan
+        run: terraform -chdir=infra/terraform/bootstrap-access apply -input=false -auto-approve bootstrap-access.tfplan
+      - name: Confirm bootstrap state has no drift
+        run: terraform -chdir=infra/terraform/bootstrap-access plan -input=false -detailed-exitcode
