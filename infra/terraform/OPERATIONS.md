@@ -20,7 +20,7 @@ The repository is configured with these non-secret variables:
 | `APPLICATION_CALLBACK_URL` | dev output `application_url` |
 | `COGNITO_DOMAIN_PREFIX` | `testsnakesaas-dev-620649695133` |
 
-`BUDGET_ALERT_EMAIL` is a masked repository secret. No AWS access keys are stored in GitHub; both jobs use short-lived OIDC credentials.
+Email budget notifications are currently unset; the SNS/Lambda automatic cost guard remains active. Adding an email address requires a reviewed Terraform configuration change. No AWS access keys are stored in GitHub; both jobs use short-lived OIDC credentials.
 
 The GitHub environment is named exactly `dev`, requires a human reviewer, and permits deployment only from `main`. Because the repository currently has one administrator, self-review is allowed; disabling it would deadlock every deployment.
 

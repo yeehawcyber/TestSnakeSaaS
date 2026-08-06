@@ -32,7 +32,6 @@ env:
   TF_IN_AUTOMATION: "true"
   TERRAFORM_VERSION: 1.15.8
   TF_VAR_application_callback_url: ${{ vars.APPLICATION_CALLBACK_URL }}
-  TF_VAR_budget_alert_email: ${{ secrets.BUDGET_ALERT_EMAIL }}
   TF_VAR_cognito_domain_prefix: ${{ vars.COGNITO_DOMAIN_PREFIX }}
   TF_VAR_image_tag: ${{ github.sha }}
 
