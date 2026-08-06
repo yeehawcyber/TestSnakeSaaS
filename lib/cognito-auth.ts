@@ -45,7 +45,7 @@ function encodeBase64Url(bytes: Uint8Array) {
 function decodeJwtPayload(token: string): Record<string, unknown> {
   const payload = token.split(".")[1];
   if (!payload) {
-    throw new Error("Cognito returned an invalid identity token.");
+    throw new Error("The sign-in service returned an invalid identity token.");
   }
 
   const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
@@ -107,7 +107,7 @@ export function clearStoredSession() {
   window.sessionStorage.removeItem(COGNITO_VERIFIER_KEY);
 }
 
-export async function createAuthorizationUrl(config: CognitoConfig) {
+async function createAuthorizationUrl(config: CognitoConfig, path = "/oauth2/authorize") {
   const verifierBytes = window.crypto.getRandomValues(new Uint8Array(64));
   const stateBytes = window.crypto.getRandomValues(new Uint8Array(24));
   const verifier = encodeBase64Url(verifierBytes);
@@ -121,7 +121,7 @@ export async function createAuthorizationUrl(config: CognitoConfig) {
   window.sessionStorage.setItem(COGNITO_VERIFIER_KEY, verifier);
   window.sessionStorage.setItem(COGNITO_STATE_KEY, state);
 
-  const url = new URL(`${config.domain}/oauth2/authorize`);
+  const url = new URL(`${config.domain}${path}`);
   url.searchParams.set("client_id", config.clientId);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", "openid email profile");
@@ -131,6 +131,14 @@ export async function createAuthorizationUrl(config: CognitoConfig) {
   url.searchParams.set("code_challenge_method", "S256");
 
   return url.toString();
+}
+
+export function createSignInUrl(config: CognitoConfig) {
+  return createAuthorizationUrl(config);
+}
+
+export function createSignUpUrl(config: CognitoConfig) {
+  return createAuthorizationUrl(config, "/signup");
 }
 
 export async function exchangeAuthorizationCode(
@@ -161,12 +169,12 @@ export async function exchangeAuthorizationCode(
   });
 
   if (!response.ok) {
-    throw new Error("Cognito could not complete sign-in. Please try again.");
+    throw new Error("The sign-in service could not complete your request. Please try again.");
   }
 
   const tokens = (await response.json()) as CognitoTokenResponse;
   if (!tokens.access_token || !tokens.id_token || !tokens.expires_in) {
-    throw new Error("Cognito returned an incomplete sign-in response.");
+    throw new Error("The sign-in service returned an incomplete response.");
   }
 
   const claims = decodeJwtPayload(tokens.id_token);

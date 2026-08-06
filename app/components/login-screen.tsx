@@ -1,12 +1,12 @@
 type LoginScreenProps = Readonly<{
   status: "loading" | "misconfigured" | "unauthenticated" | "error";
   error?: string;
-  missing?: readonly string[];
   onSignIn: () => void | Promise<void>;
+  onSignUp: () => void | Promise<void>;
   onRetry: () => void;
 }>;
 
-export function LoginScreen({ status, error, missing, onSignIn, onRetry }: LoginScreenProps) {
+export function LoginScreen({ status, error, onSignIn, onSignUp, onRetry }: LoginScreenProps) {
   const waiting = status === "loading";
   const blocked = status === "misconfigured";
 
@@ -22,7 +22,7 @@ export function LoginScreen({ status, error, missing, onSignIn, onRetry }: Login
             <small>Secure web arcade</small>
           </span>
         </div>
-        <span className="auth-provider">Identity by AWS Cognito</span>
+        <span className="auth-provider">Player access</span>
       </header>
 
       <section className="login-stage" aria-labelledby="login-title">
@@ -47,40 +47,42 @@ export function LoginScreen({ status, error, missing, onSignIn, onRetry }: Login
               S/S
             </span>
             <p className="eyebrow">Authenticated play</p>
-            <h2>{blocked ? "Connect Cognito" : status === "error" ? "Try that again" : "Player sign-in"}</h2>
+            <h2>{status === "error" ? "Try that again" : "Player access"}</h2>
             <p>
               {blocked
-                ? "The Cognito connection has not been configured for this environment."
-                : error ?? "Continue to the AWS-hosted sign-in. Passwords never pass through Snake/Shift."}
+                ? "Sign-in is temporarily unavailable. Please try again later."
+                : error ?? "Sign in to continue, or create an account if you are a new player."}
             </p>
-
-            {blocked && missing && missing.length > 0 && (
-              <div className="config-notice">
-                <span>Missing runtime settings</span>
-                <code>{missing.join(" · ")}</code>
-              </div>
-            )}
 
             {status === "error" ? (
               <button className="login-button" type="button" onClick={onRetry}>
                 Restart sign-in <span aria-hidden="true">↗</span>
               </button>
             ) : (
-              <button
-                className="login-button"
-                type="button"
-                onClick={() => void onSignIn()}
-                disabled={waiting || blocked}
-              >
-                {waiting ? "Checking session" : blocked ? "Setup required" : "Continue with Cognito"}
-                <span aria-hidden="true">↗</span>
-              </button>
+              <div className="login-actions">
+                <button
+                  className="login-button"
+                  type="button"
+                  onClick={() => void onSignIn()}
+                  disabled={waiting || blocked}
+                >
+                  Sign In <span aria-hidden="true">↗</span>
+                </button>
+                <button
+                  className="login-button login-button-secondary"
+                  type="button"
+                  onClick={() => void onSignUp()}
+                  disabled={waiting || blocked}
+                >
+                  Sign Up <span aria-hidden="true">+</span>
+                </button>
+              </div>
             )}
 
-            <div className="auth-details" aria-label="Authentication details">
-              <span>Authorization Code</span>
-              <span>PKCE protected</span>
-              <span>No app secret</span>
+            <div className="auth-details" aria-label="Account benefits">
+              <span>Secure account</span>
+              <span>Private session</span>
+              <span>Protected access</span>
             </div>
           </div>
         </div>

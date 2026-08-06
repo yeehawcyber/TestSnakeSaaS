@@ -10,7 +10,7 @@ This directory is the infrastructure source of truth for the cost-bounded `dev` 
 | ECR | Immutable, scanned Lambda container images with bounded retention |
 | Lambda | On-demand Next.js server with 1 GB memory, 30-second timeout, and reserved concurrency 2 |
 | API Gateway HTTP API | AWS-managed HTTPS endpoint with 2 requests/second and burst 4 throttling |
-| Cognito Lite | Hosted PKCE login; public self-registration is disabled |
+| Cognito Lite | Hosted PKCE login with player self-registration |
 | CloudWatch Logs | Seven-day Lambda log retention |
 | AWS Budget | Account-wide USD 10 monthly budget |
 | Cost guard | Budget alerts invoke a dedicated Lambda that disables web concurrency |

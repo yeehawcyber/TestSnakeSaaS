@@ -20,7 +20,7 @@ Calculated fixed planning baseline: **about $1.02/month**, leaving about **$8.98
 - Automatic cost guard: at 80% actual or 100% forecast, AWS Budgets publishes to SNS and a dedicated Lambda sets the web Lambda concurrency to zero.
 - API Gateway throttle: 2 requests/second, burst 4.
 - Lambda reserved concurrency: 2; no provisioned concurrency.
-- Cognito public self-registration: disabled.
+- Cognito player self-registration: enabled.
 - CloudWatch log retention: seven days.
 - ECR: immutable tags and bounded lifecycle retention.
 

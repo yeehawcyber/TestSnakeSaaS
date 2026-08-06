@@ -25,4 +25,9 @@ run "dev_creation_plan" {
     condition     = aws_lambda_function.cost_guard.reserved_concurrent_executions == 1
     error_message = "The budget guard Lambda must retain bounded concurrency."
   }
+
+  assert {
+    condition     = module.cognito.self_registration_enabled
+    error_message = "The dev user pool must allow new players to self-register."
+  }
 }

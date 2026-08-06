@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   clearStoredSession,
-  createAuthorizationUrl,
   createLogoutUrl,
+  createSignInUrl,
+  createSignUpUrl,
   exchangeAuthorizationCode,
   normalizeCognitoConfig,
   readStoredSession,
@@ -124,15 +125,19 @@ export function useCognitoAuth() {
     return () => window.clearTimeout(timer);
   }, [auth]);
 
-  const signIn = useCallback(async () => {
+  const beginAuthentication = useCallback(async (mode: "sign-in" | "sign-up") => {
     if (!config) {
       return;
     }
 
     setAuth((current) => ({ ...current, status: "loading", error: undefined }));
-    const authorizationUrl = await createAuthorizationUrl(config);
+    const authorizationUrl =
+      mode === "sign-up" ? await createSignUpUrl(config) : await createSignInUrl(config);
     window.location.assign(authorizationUrl);
   }, [config]);
+
+  const signIn = useCallback(() => beginAuthentication("sign-in"), [beginAuthentication]);
+  const signUp = useCallback(() => beginAuthentication("sign-up"), [beginAuthentication]);
 
   const signOut = useCallback(() => {
     clearStoredSession();
@@ -151,6 +156,7 @@ export function useCognitoAuth() {
   return {
     ...auth,
     signIn,
+    signUp,
     signOut,
     retry,
   };

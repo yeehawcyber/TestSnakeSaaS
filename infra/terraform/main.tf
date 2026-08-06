@@ -12,7 +12,7 @@ module "cognito" {
   callback_urls             = [var.application_callback_url]
   logout_urls               = [var.application_callback_url]
   cognito_domain_prefix     = var.cognito_domain_prefix
-  self_registration_enabled = false
+  self_registration_enabled = true
   tags                      = local.common_tags
 }
 
