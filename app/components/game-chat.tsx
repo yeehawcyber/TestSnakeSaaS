@@ -19,7 +19,7 @@ type GameChatProps = Readonly<{
 const WELCOME_MESSAGE: DisplayMessage = {
   id: "welcome",
   role: "assistant",
-  content: "I am Shift, your Bedrock-powered game assistant. Ask for a Snake tactic or anything else on your mind.",
+  content: "I am Shift, your game assistant. Ask for a Snake tactic or anything else on your mind.",
   local: true,
 };
 
@@ -170,7 +170,7 @@ export function GameChat({ accessToken, context }: GameChatProps) {
         <section className="chat-panel" aria-label="Shift AI assistant">
           <header className="chat-header">
             <div>
-              <span>Bedrock live</span>
+              <span>Shift online</span>
               <h2>Ask Shift</h2>
             </div>
             <button type="button" aria-label="Close assistant" onClick={() => setOpen(false)}>

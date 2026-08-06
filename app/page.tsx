@@ -485,8 +485,8 @@ export default function Home() {
     <LoginScreen
       status={auth.status === "authenticated" ? "loading" : auth.status}
       error={auth.error}
-      missing={auth.missing}
       onSignIn={auth.signIn}
+      onSignUp={auth.signUp}
       onRetry={auth.retry}
     />
   );

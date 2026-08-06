@@ -133,7 +133,7 @@ export async function POST(request: Request) {
   const authHeader = request.headers.get("authorization");
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
   if (!token || token.length > 8_192) {
-    return jsonError("A valid Cognito session is required.", 401);
+    return jsonError("A valid player session is required.", 401);
   }
 
   const tokenVerifier = getVerifier();
@@ -168,7 +168,7 @@ export async function POST(request: Request) {
   const client = getBedrockClient();
   const modelId = process.env.BEDROCK_MODEL_ID?.trim();
   if (!client || !modelId) {
-    return jsonError("The Bedrock assistant is not configured on the server.", 503);
+    return jsonError("The game assistant is temporarily unavailable.", 503);
   }
 
   const guardrailIdentifier = process.env.BEDROCK_GUARDRAIL_ID?.trim();
@@ -197,7 +197,7 @@ export async function POST(request: Request) {
 
     const responseStream = response.stream;
     if (!responseStream) {
-      return jsonError("Bedrock returned no response stream.", 502);
+      return jsonError("The game assistant returned no response.", 502);
     }
 
     const encoder = new TextEncoder();
@@ -247,7 +247,7 @@ export async function POST(request: Request) {
     return jsonError(
       name === "ThrottlingException"
         ? "The assistant is busy. Try again in a moment."
-        : "The Bedrock assistant is temporarily unavailable.",
+        : "The game assistant is temporarily unavailable.",
       serviceErrorStatus(error),
     );
   }

@@ -692,6 +692,22 @@ a:focus-visible {
   text-transform: uppercase;
 }
 
+.login-actions {
+  display: grid;
+  gap: 12px;
+  margin-top: 30px;
+}
+
+.login-actions .login-button {
+  margin-top: 0;
+}
+
+.login-button-secondary {
+  border: 1px solid var(--acid);
+  background: transparent;
+  color: var(--acid);
+}
+
 .login-button:disabled {
   background: #4a4c43;
   color: #8f9287;
